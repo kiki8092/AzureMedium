@@ -19,9 +19,65 @@
         authOptions: {
             authType: 'subscriptionKey',
             subscriptionKey: '59ZvmFlE65vHcvkJDzZgyxMiyC4itiMdLrLgUBpjC569Smmkfo2RJQQJ99BAACYeBjFr1tGGAAAgAZMP3DJs'
+        },
+
+    });
+
+        //Wait until the map resources are ready.
+    map.events.add('ready', function() {
+
+    //Create a data source and add it to the map.
+    datasource = new atlas.source.DataSource();
+    map.sources.add(datasource);
+
+    //Add a layer for rendering point data.
+    var resultLayer = new atlas.layer.SymbolLayer(datasource, null, {
+        iconOptions: {      // Symbol layer object specifies how the data in the data source will be rendered on map.
+            image: 'pin-round-darkblue',
+            anchor: 'center',
+            allowOverlap: true
+        },
+        textOptions: {
+            anchor: "top"
         }
     });
-     }
+
+    map.layers.add(resultLayer);
+
+    // Search for gasoline stations near the provided lat long
+    var query = 'gasoline-station';
+    var radius = 9000;
+    var lat = 47.64452336193245;
+    var lon = -122.13687658309935;
+    var url = `https://atlas.microsoft.com/search/poi/json?api-version=1.0&query=${query}&lat=${lat}&lon=${lon}&radius=${radius}`;
+
+    fetch(url, {
+    headers: {
+        "Subscription-Key": map.authentication.getToken()
+    }
+    })
+    .then((response) => response.json())
+    .then((response) => {
+    var bounds = [];
+
+    //Extract GeoJSON feature collection from the response and add it to the datasource
+    var data = response.results.map((result) => {
+        var position = [result.position.lon, result.position.lat];
+        bounds.push(position);
+        return new atlas.data.Feature(new atlas.data.Point(position), { ...result });
+    });
+    datasource.add(data);
+
+    //Set camera to bounds to show the results
+    map.setCamera({
+        bounds: new atlas.data.BoundingBox.fromLatLngs(bounds),
+        zoom: 10,
+        padding: 15
+    });
+    });
+    });     // end of ready event handler
+
+ }      // end of GetMap function
      </script>
 
      <style>
