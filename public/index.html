@@ -1,17 +1,221 @@
 <!DOCTYPE html>
-<html lang="">
-  <head>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width,initial-scale=1.0">
-    <link rel="icon" href="<%= BASE_URL %>favicon.ico">
-    <title><%= htmlWebpackPlugin.options.title %></title>
-  </head>
-  <body>
-    <noscript>
-      <strong>We're sorry but <%= htmlWebpackPlugin.options.title %> doesn't work properly without JavaScript enabled. Please enable it to continue.</strong>
-    </noscript>
-    <div id="app"></div>
-    <!-- built files will be auto injected -->
-  </body>
-</html>
+ <html>
+ <head>
+     <title>Map Search</title>
+     <meta charset="utf-8" />
+
+     <!-- Add references to the Azure Maps Map control JavaScript and CSS files. -->
+     <link rel="stylesheet" href="https://atlas.microsoft.com/sdk/javascript/mapcontrol/3/atlas.min.css" type="text/css" />
+     <script src="https://atlas.microsoft.com/sdk/javascript/mapcontrol/3/atlas.min.js"></script>
+
+     <script>
+     function GetMap(){
+         //Add Map Control JavaScript code here.
+         //Instantiate a map object
+        var map = new atlas.Map("myMap", {
+        view: 'Auto',
+        center: [-122.13687658309935, 47.64452336193245],
+        zoom: 12,
+
+        // Add your Azure Maps subscription key. https://aka.ms/am-primaryKey
+        authOptions: {
+            authType: 'subscriptionKey',
+            subscriptionKey: '59ZvmFlE65vHcvkJDzZgyxMiyC4itiMdLrLgUBpjC569Smmkfo2RJQQJ99BAACYeBjFr1tGGAAAgAZMP3DJs'
+        },
+
+    });
+
+        // map.setCamera({
+        //     center: [-122.13687658309935, 47.64452336193245], // Center around Seattle
+        //     zoom: 12
+        // });
+
+
+        //Wait until the map resources are ready.
+        map.events.add('ready', function() {
+
+        //Create a data source and add it to the map.
+        datasource = new atlas.source.DataSource();
+        map.sources.add(datasource);
+
+        //Add a layer for rendering point data.
+        var resultLayer = new atlas.layer.SymbolLayer(datasource, null, {
+            iconOptions: {      // Symbol layer object specifies how the data in the data source will be rendered on map.
+                image: 'pin-round-darkblue',
+                anchor: 'center',
+                allowOverlap: true
+            },
+            textOptions: {
+                anchor: "top"
+            }
+        });
+
+        console.log(`Map Authentication Token -----> ${map.authentication.getToken()}`);
+
+        map.layers.add(resultLayer);
+
+        // Search for gasoline stations near the provided lat long
+        var query = 'gasoline-station';
+        var radius = 9000;
+        var lat = 47.64452336193245;        // Seattle
+        var lon = -122.13687658309935;
+        var url = `https://atlas.microsoft.com/search/poi/json?api-version=1.0&query=${query}&lat=${lat}&lon=${lon}&radius=${radius}`;
+
+
+        fetch(url, {
+            headers: {
+                "Subscription-Key": map.authentication.getToken()
+                // "Subscription-Key": "59ZvmFlE65vHcvkJDzZgyxMiyC4itiMdLrLgUBpjC569Smmkfo2RJQQJ99BAACYeBjFr1tGGAAAgAZMP3DJs"
+            }
+        })
+            .then((response) => response.json())
+            .then((response) => {
+
+                console.log("This is the Fetch Response ---------> ", response)
+
+                var bounds = [];
+
+                //Extract GeoJSON feature collection from the response and add it to the datasource
+                var data = response.results.map((result) => {
+                    var position = [result.position.lon, result.position.lat];
+                    bounds.push(position);
+                    return new atlas.data.Feature(new atlas.data.Point(position), {...result});
+                });
+                datasource.add(data);
+
+
+                // After data is added, set the camera
+                    map.events.add('dataadded', function () {
+                        console.log("Data Added, adjusting camera...");
+
+                        if (bounds.length > 0) {
+                            map.setCamera({
+                                bounds: atlas.data.BoundingBox.fromLatLngs(bounds),
+                                // bounds: data.bbox,
+                                padding: 15,
+                            });
+                        }
+                        else {
+                    console.warn("No results found in response.");
+                    }
+                    });
+            })
+            .catch((error) => console.error("API Request Error:", error));
+
+        // Create a popup but leave it closed so we can update it and display it later.
+        popup = new atlas.Popup();
+
+        //Add a mouse over event to the result layer and display a popup when this event fires.
+        map.events.add('mouseover', resultLayer, showPopup);
+
+        function showPopup(e) {
+            //Get the properties and coordinates of the first shape that the event occurred on.
+
+            var p = e.shapes[0].getProperties();
+            var position = e.shapes[0].getCoordinates();
+
+            //Create HTML from properties of the selected result.
+            var html = `
+              <div style="padding:5px">
+                <div><b>${p.poi.name}</b></div>
+                <div>${p.address.freeformAddress}</div>
+                <div>${position[1]}, ${position[0]}</div>
+              </div>`;
+
+            //Update the content and position of the popup.
+            popup.setPopupOptions({
+                content: html,
+                position: position
+            });
+
+            //Open the popup.
+            popup.open(map);
+        }
+            })     // end of ready event handler
+
+ }      // end of GetMap function
+     </script>
+
+     <style>
+         html,
+         body {
+             width: 100%;
+             height: 100%;
+             padding: 0;
+             margin: 0;
+         }
+
+         #myMap {
+             width: 100%;
+             height: 100%;
+         }
+
+         #search {
+            position: absolute;
+            left: 0px;
+            top: 0px;
+            width: 400px;
+            box-shadow: 0px 24px 74px 0px rgba(0, 0, 0, .32);
+            border: 1px solid #ccc;
+            overflow-y: hidden;
+        }
+
+            #search > .search-input-box {
+                background: #fff;
+                height: 72px;
+                width: 100%;
+            }
+
+                #search > .search-input-box > .search-input-group {
+                    position: relative;
+                    top: 20px;
+                    left: 20px;
+                    width: 358px;
+                    height: 30px;
+                    margin: 0;
+                    padding: 0;
+                    border: 1px dotted #ccc;
+                }
+
+                    #search > .search-input-box > .search-input-group > .search-icon {
+                        margin: 0;
+                        padding: 0;
+                        background-size: 20px 20px;
+                        width: 30px;
+                        height: 30px;
+                        background-position: center;
+                        background-repeat: no-repeat;
+                        background-image: url("data:image/svg+xml,%3Csvg id='Layer_1' data-name='Layer 1' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctitle%3E-%3C/title%3E%3Cpath d='M10.5,0a5.4457,5.4457,0,0,1,2.7734.75A5.6134,5.6134,0,0,1,15.25,2.7266a5.5224,5.5224,0,0,1,.5547,4.2344A5.4147,5.4147,0,0,1,15.25,8.2734,5.6134,5.6134,0,0,1,13.2734,10.25a5.5014,5.5014,0,0,1-4.6445.4219,5.6256,5.6256,0,0,1-1.6445-.9453L.8516,15.8516A.4807.4807,0,0,1,.5,16a.4823.4823,0,0,1-.3516-.1484.4905.4905,0,0,1,0-.7031l6.125-6.1328a5.6194,5.6194,0,0,1-.9453-1.6445A5.39,5.39,0,0,1,5,5.5a5.4457,5.4457,0,0,1,.75-2.7734A5.6134,5.6134,0,0,1,7.7266.75,5.4457,5.4457,0,0,1,10.5,0Zm0,10a4.347,4.347,0,0,0,1.75-.3555A4.5254,4.5254,0,0,0,14.6445,7.25,4.347,4.347,0,0,0,15,5.5a4.347,4.347,0,0,0-.3555-1.75A4.5254,4.5254,0,0,0,12.25,1.3555a4.4854,4.4854,0,0,0-3.5,0A4.5254,4.5254,0,0,0,6.3555,3.75a4.4854,4.4854,0,0,0,0,3.5A4.5254,4.5254,0,0,0,8.75,9.6445,4.3487,4.3487,0,0,0,10.5,10Z' fill='%234b4b4b'/%3E%3C/svg%3E");
+                    }
+
+                    #search > .search-input-box > .search-input-group > input {
+                        display: inline-block;
+                        position: absolute;
+                        top: 0px;
+                        left: 30px;
+                        width: calc(100% - 40px);
+                        height: 100%;
+                        margin: 0;
+                        padding: 0 5px;
+                        border-collapse: collapse;
+                        border: 0px;
+                    }
+
+                        #search > .search-input-box > .search-input-group > input:focus {
+                            outline: none;
+                        }
+     </style>
+ </head>
+ <body onload="GetMap()">
+     <div id="myMap"></div>
+     <div id="search">
+        <div class="search-input-box">
+            <div class="search-input-group">
+                <div class="search-icon" type="button"></div>
+                <input id="search-input" type="text" placeholder="Search">
+            </div>
+        </div>
+        <ul id="results-panel"></ul>
+    </div>
+ </body>
+ </html>
